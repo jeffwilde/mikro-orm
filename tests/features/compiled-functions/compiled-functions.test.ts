@@ -304,6 +304,69 @@ describe('compiled functions', () => {
     }
   });
 
+  test('snapshot generator handles compiled functions with converter params for scalar types', async () => {
+    // Simulate the cross-environment mismatch that occurs when `mikro-orm compile`
+    // generates snapshotGenerator functions with convertToDatabaseValue_* params for
+    // scalar types (because prop.customType was set during compilation), but the
+    // runtime discovers metadata where simple scalars hit the early return in
+    // getPropertySnapshot() without registering converters in the context Map.
+    // This causes TypeError on eval-free runtimes (e.g. Cloudflare Workers) where
+    // new Function() fallback is not available.
+    const compiledFunctions = generateCompiledFunctions(orm);
+    const bookMeta = orm.getMetadata().get(Book);
+    const snapshotKey = `snapshotGenerator-${bookMeta.uniqueName}`;
+
+    // Replace the Book snapshot generator with one that expects converter params
+    // for all scalar properties — mimicking what `mikro-orm compile` produces when
+    // prop.customType is set (the customType code path in getPropertySnapshot).
+    compiledFunctions[snapshotKey] = (
+      clone: any,
+      cloneEmbeddable: any,
+      convertToDatabaseValue_id: any,
+      convertToDatabaseValue_title: any,
+      convertToDatabaseValue_price: any,
+    ) => {
+      return (entity: any) => {
+        const ret: any = {};
+
+        if (typeof entity['id'] !== 'undefined' && entity['id'] !== null) {
+          ret['id'] = convertToDatabaseValue_id(entity['id']);
+        }
+
+        if (typeof entity['title'] !== 'undefined' && entity['title'] !== null) {
+          ret['title'] = convertToDatabaseValue_title(entity['title']);
+        }
+
+        if (typeof entity['price'] !== 'undefined' && entity['price'] !== null) {
+          ret['price'] = convertToDatabaseValue_price(entity['price']);
+        }
+
+        return ret;
+      };
+    };
+
+    const orm2 = await MikroORM.init({ ...initOptions, compiledFunctions });
+
+    try {
+      await orm2.schema.refresh();
+
+      // em.flush() triggers prepareEntity → getSnapshotGenerator → Utils.createFunction.
+      // Without the fix, the runtime context has only [clone, cloneEmbeddable] but the
+      // compiled function expects converter params too — they receive undefined, causing
+      // TypeError: convertToDatabaseValue_title is not a function.
+      const book = orm2.em.create(Book, { title: 'Test', price: 9.99 });
+      await orm2.em.flush();
+      expect(book.id).toBeDefined();
+
+      orm2.em.clear();
+      const loaded = await orm2.em.findOneOrFail(Book, book.id);
+      expect(loaded.title).toBe('Test');
+      expect(loaded.price).toBe(9.99);
+    } finally {
+      await orm2.close(true);
+    }
+  });
+
   test('falls back to JIT when key is missing from compiledFunctions', async () => {
     // Provide only partial compiled functions (missing Book)
     const allFunctions = generateCompiledFunctions(orm);

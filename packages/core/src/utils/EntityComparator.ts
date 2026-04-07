@@ -781,6 +781,15 @@ export class EntityComparator {
     ret += `) {\n`;
 
     if (['number', 'string', 'boolean'].includes(prop.type.toLowerCase())) {
+      // When compiledFunctions are enabled, the compiled function may have been
+      // generated in an environment where prop.customType was set for scalar types,
+      // resulting in convertToDatabaseValue_* parameters. Register identity converters
+      // so the runtime context Map matches the compiled function's parameter list.
+      if (this.#config?.get('compiledFunctions')) {
+        const convertorKey = this.safeKey(prop.name);
+        context.set(`convertToDatabaseValue_${convertorKey}`, (val: any) => val);
+      }
+
       return ret + `    ret${dataKey} = entity${entityKey}${unwrap};\n  }\n`;
     }
 
