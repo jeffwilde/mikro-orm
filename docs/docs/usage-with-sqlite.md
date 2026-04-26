@@ -121,6 +121,43 @@ D1 has significant limitations compared to regular SQLite:
 
 See the [D1 SQL documentation](https://developers.cloudflare.com/d1/sql-api/sql-statements/) for more details on supported SQL statements.
 
+## Using Cloudflare Durable Objects
+
+> **Experimental:** Durable Objects SQLite support is experimental. Use with caution.
+
+[Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/) provide per-object SQLite storage via `ctx.storage.sql`. Use the generic `SqliteDriver` with `kysely-do`:
+
+```bash npm2yarn
+npm install @mikro-orm/core @mikro-orm/sql kysely kysely-do
+```
+
+```ts
+import { MikroORM, SqliteDriver } from '@mikro-orm/sql';
+import { DurableObjectSqliteDialect } from 'kysely-do';
+
+export class MyDurableObject extends DurableObject {
+  orm?: MikroORM;
+
+  async getOrm() {
+    return (this.orm ??= await MikroORM.init({
+      driver: SqliteDriver,
+      entities: [...],
+      dbName: 'do',
+      driverOptions: new DurableObjectSqliteDialect(this.ctx.storage.sql),
+      implicitTransactions: false,
+    }));
+  }
+}
+```
+
+### Durable Objects Limitations
+
+Durable Objects SQLite has similar limitations to D1:
+
+- **No transaction support:** Durable Objects do not support explicit transaction statements. You must set `implicitTransactions: false`.
+- **`em.transactional()` will not work:** No atomicity guarantees from explicit transactions.
+- **No query streaming:** Results must be fetched entirely into memory.
+
 ## Using Bun SQLite
 
 Bun has a built-in [high-performance SQLite module](https://bun.sh/docs/api/sqlite) (`bun:sqlite`). Use the generic `SqliteDriver` with the `kysely-bun-sqlite` dialect:
