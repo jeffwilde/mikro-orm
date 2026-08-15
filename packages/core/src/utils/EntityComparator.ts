@@ -100,6 +100,7 @@ export class EntityComparator {
       return exists;
     }
 
+    this.#tmpIndex = 0;
     const lines: string[] = [];
     const context = new Map<string, any>();
     context.set('isEntityOrRef', (val: any) => Utils.isEntity(val, true));
@@ -164,6 +165,7 @@ export class EntityComparator {
       return exists;
     }
 
+    this.#tmpIndex = 0;
     const lines: string[] = [];
     const context = new Map<string, any>();
     context.set('isEntityOrRef', (val: any) => Utils.isEntity(val, true));
@@ -225,6 +227,7 @@ export class EntityComparator {
       return exists;
     }
 
+    this.#tmpIndex = 0;
     const lines: string[] = [];
     const context = new Map<string, any>();
     context.set('isEntityOrRef', (val: any) => Utils.isEntity(val, true));
@@ -297,6 +300,7 @@ export class EntityComparator {
       return exists;
     }
 
+    this.#tmpIndex = 0;
     const lines: string[] = [];
     const context = new Map<string, any>();
     context.set('clone', clone);
@@ -394,6 +398,7 @@ export class EntityComparator {
       return exists;
     }
 
+    this.#tmpIndex = 0;
     const lines: string[] = [];
     const context = new Map<string, any>();
     context.set('PolymorphicRef', PolymorphicRef);
@@ -932,6 +937,7 @@ export class EntityComparator {
       return exists;
     }
 
+    this.#tmpIndex = 0;
     const lines: string[] = [];
     const context = new Map<string, any>();
     context.set('compareArrays', compareArrays);

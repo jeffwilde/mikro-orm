@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import type { ArgumentsCamelCase, Argv } from 'yargs';
 import {
@@ -88,10 +88,18 @@ export class CompileCommand implements BaseCommand<CompileArgs> {
   }
 
   static capture(metadata: MetadataStorage, config: Configuration) {
-    const captured: { key: string; contextKeys: string[]; code: string }[] = [];
+    const captured = new Map<string, { key: string; contextKeys: string[]; code: string }>();
     const original = Utils.createFunction;
     Utils.createFunction = (context, code, _compiledFunctions, key) => {
-      captured.push({ key: key!, contextKeys: [...context.keys()], code });
+      const compiledKey = Utils.getCompiledFunctionKey(context, code);
+      const generated = { key: compiledKey, contextKeys: [...context.keys()], code };
+      const existing = captured.get(compiledKey);
+
+      if (existing && (existing.code !== code || !Utils.equals(existing.contextKeys, generated.contextKeys))) {
+        throw new Error(`Compiled function key collision for '${compiledKey}'`);
+      }
+
+      captured.set(compiledKey, generated);
       return original.call(Utils, context, code);
     };
 
@@ -122,6 +130,6 @@ export class CompileCommand implements BaseCommand<CompileArgs> {
       Utils.createFunction = original;
     }
 
-    return captured;
+    return [...captured.values()];
   }
 }

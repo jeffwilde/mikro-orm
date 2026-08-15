@@ -57,6 +57,9 @@ export default defineConfig({
 });
 ```
 
+The generated helpers use content-derived keys, so unrelated entity imports in a deployed bundle do not invalidate the
+artifact.
+
 This pairs well with `GeneratedCacheAdapter` for full production deployment without `ts-morph` or `new Function`:
 
 ```ts

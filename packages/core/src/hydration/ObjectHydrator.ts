@@ -111,6 +111,7 @@ export class ObjectHydrator extends Hydrator {
       return exists;
     }
 
+    this.#tmpIndex = 0;
     const lines: string[] = [];
     const context = new Map<string, any>();
     const props = this.getProperties(meta, type);

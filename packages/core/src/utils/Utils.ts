@@ -941,8 +941,11 @@ export class Utils {
     compiledFunctions?: CompiledFunctions,
     key?: string,
   ): any {
-    if (key && compiledFunctions?.[key]) {
-      return compiledFunctions[key](...context.values());
+    const compiledKey = this.getCompiledFunctionKey(context, code);
+    const compiledFunction = compiledFunctions?.[compiledKey] ?? (key ? compiledFunctions?.[key] : undefined);
+
+    if (compiledFunction) {
+      return compiledFunction(...context.values());
     }
 
     try {
@@ -954,6 +957,12 @@ export class Utils {
       console.error(code);
       throw e;
     }
+  }
+
+  /** @internal */
+  static getCompiledFunctionKey(context: Map<string, any>, code: string): string {
+    const source = [...context.keys(), code].join('\0');
+    return `compiled-${this.hash(source)}`;
   }
 
   static callCompiledFunction<T extends unknown[], R>(fn: (...args: T) => R, ...args: T): R {

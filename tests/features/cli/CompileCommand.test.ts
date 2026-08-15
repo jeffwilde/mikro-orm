@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { EntityMetadata, MetadataStorage, ReferenceKind } from '@mikro-orm/core';
+import { EntityMetadata, MetadataStorage, ReferenceKind, Utils } from '@mikro-orm/core';
 import { Configuration, MetadataDiscovery } from '@mikro-orm/core';
 import { fs as fsUtils } from '@mikro-orm/core/fs-utils';
 import { CLIHelper } from '@mikro-orm/cli';
@@ -167,6 +167,20 @@ describe('CompileCommand', () => {
     expect(existsSync(outDtsPath)).toBe(true);
     const dts = readFileSync(outDtsPath, 'utf-8');
     expect(dts).toContain('export default compiledFunctions');
+  });
+
+  test('capture detects portable key collisions', () => {
+    const config = new Configuration(
+      { driver: MySqlDriver, metadataCache: { enabled: true }, getDriver: () => ({ getPlatform: vi.fn() }) } as any,
+      false,
+    );
+    const keyMock = vi.spyOn(Utils, 'getCompiledFunctionKey').mockReturnValue('compiled-collision');
+
+    try {
+      expect(() => CompileCommand.capture(createSimpleMetadata(), config)).toThrow(/key collision/);
+    } finally {
+      keyMock.mockRestore();
+    }
   });
 
   test('handler outputs next to ORM config file by default', async () => {

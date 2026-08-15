@@ -85,6 +85,42 @@ describe('compiled functions', () => {
     expect(mockFn).toHaveBeenCalledWith(1, 2);
   });
 
+  test('Utils.createFunction prefers the portable content key', () => {
+    const context = new Map<string, any>([
+      ['a', 1],
+      ['b', 2],
+    ]);
+    const code = 'return a + b;';
+    const key = Utils.getCompiledFunctionKey(context, code);
+    const mockFn = vi.fn((...args: any[]) => 'pregenerated');
+
+    const result = Utils.createFunction(context, code, { [key]: mockFn }, 'legacy-process-local-key');
+
+    expect(key).toMatch(/^compiled-[a-f0-9]{16}$/);
+    expect(result).toBe('pregenerated');
+    expect(mockFn).toHaveBeenCalledWith(1, 2);
+  });
+
+  test('portable keys include generated code and ordered context names', () => {
+    const context = new Map<string, any>([
+      ['a', 1],
+      ['b', 2],
+    ]);
+
+    expect(Utils.getCompiledFunctionKey(context, 'return a + b;')).not.toBe(
+      Utils.getCompiledFunctionKey(context, 'return a - b;'),
+    );
+    expect(Utils.getCompiledFunctionKey(context, 'return a + b;')).not.toBe(
+      Utils.getCompiledFunctionKey(
+        new Map<string, any>([
+          ['b', 2],
+          ['a', 1],
+        ]),
+        'return a + b;',
+      ),
+    );
+  });
+
   test('Utils.createFunction falls back to new Function when key does not match', () => {
     const context = new Map<string, any>([
       ['a', 1],
@@ -120,33 +156,20 @@ describe('compiled functions', () => {
     expect(result).toBe(3);
   });
 
-  test('generates all expected function keys', () => {
-    const compiledFunctions = generateCompiledFunctions(orm);
-    const keys = Object.keys(compiledFunctions);
+  test('generated keys do not depend on process-local metadata ids', () => {
+    const before = CompileCommand.capture(orm.getMetadata(), orm.config).map(item => item.key);
+    const metadata = [...orm.getMetadata()];
+    const originalIds = metadata.map(meta => meta._id);
 
-    const authorMeta = orm.getMetadata().get(Author);
-    const bookMeta = orm.getMetadata().get(Book);
+    metadata.forEach((meta, index) => ((meta as any)._id = 100_000 + index * 1000));
 
-    // Author functions (using uniqueName)
-    expect(keys).toContain(`hydrator-${authorMeta.uniqueName}-full-false`);
-    expect(keys).toContain(`hydrator-${authorMeta.uniqueName}-full-true`);
-    expect(keys).toContain(`hydrator-${authorMeta.uniqueName}-reference-false`);
-    expect(keys).toContain(`hydrator-${authorMeta.uniqueName}-reference-true`);
-    expect(keys).toContain(`comparator-${authorMeta.uniqueName}`);
-    expect(keys).toContain(`snapshotGenerator-${authorMeta.uniqueName}`);
-    expect(keys).toContain(`resultMapper-${authorMeta.uniqueName}`);
-    expect(keys).toContain(`pkGetter-${authorMeta.uniqueName}`);
-    expect(keys).toContain(`pkGetterConverted-${authorMeta.uniqueName}`);
-    expect(keys).toContain(`pkSerializer-${authorMeta.uniqueName}`);
-
-    // Book functions (using uniqueName)
-    expect(keys).toContain(`hydrator-${bookMeta.uniqueName}-full-false`);
-    expect(keys).toContain(`comparator-${bookMeta.uniqueName}`);
-    expect(keys).toContain(`snapshotGenerator-${bookMeta.uniqueName}`);
-    expect(keys).toContain(`resultMapper-${bookMeta.uniqueName}`);
-    expect(keys).toContain(`pkGetter-${bookMeta.uniqueName}`);
-    expect(keys).toContain(`pkGetterConverted-${bookMeta.uniqueName}`);
-    expect(keys).toContain(`pkSerializer-${bookMeta.uniqueName}`);
+    try {
+      const after = CompileCommand.capture(orm.getMetadata(), orm.config).map(item => item.key);
+      expect(after).toEqual(before);
+      expect(after.every(key => /^compiled-[a-f0-9]{16}$/.test(key))).toBe(true);
+    } finally {
+      metadata.forEach((meta, index) => ((meta as any)._id = originalIds[index]));
+    }
   });
 
   test('compiled functions produce identical results to JIT path', async () => {
@@ -214,7 +237,9 @@ describe('compiled functions', () => {
       Utils.createFunction = (context, code, cf, key) => {
         const result = original.call(Utils, context, code, cf, key);
 
-        if (!key || !cf?.[key]) {
+        const compiledKey = Utils.getCompiledFunctionKey(context, code);
+
+        if (!cf?.[compiledKey] && (!key || !cf?.[key])) {
           jitFallbackCalled = true;
         }
 
@@ -279,7 +304,9 @@ describe('compiled functions', () => {
       Utils.createFunction = (context, code, cf, key) => {
         const result = original.call(Utils, context, code, cf, key);
 
-        if (!key || !cf?.[key]) {
+        const compiledKey = Utils.getCompiledFunctionKey(context, code);
+
+        if (!cf?.[compiledKey] && (!key || !cf?.[key])) {
           jitFallbackCalled = true;
         }
 
@@ -304,24 +331,12 @@ describe('compiled functions', () => {
     }
   });
 
-  test('falls back to JIT when key is missing from compiledFunctions', async () => {
-    // Provide only partial compiled functions (missing Book)
-    const allFunctions = generateCompiledFunctions(orm);
-    const partialFunctions: Record<string, (...args: any[]) => any> = {};
-    const authorUniqueName = orm.getMetadata().get(Author).uniqueName;
-
-    for (const [key, fn] of Object.entries(allFunctions)) {
-      if (key.includes(authorUniqueName)) {
-        partialFunctions[key] = fn;
-      }
-    }
-
-    const orm2 = await MikroORM.init({ ...initOptions, compiledFunctions: partialFunctions });
+  test('falls back to JIT when compiledFunctions is empty', async () => {
+    const orm2 = await MikroORM.init({ ...initOptions, compiledFunctions: {} });
 
     try {
       await orm2.schema.refresh();
 
-      // Should still work - Book uses JIT fallback, Author uses compiled
       const book = orm2.em.create(Book, { title: 'Test', price: 9.99 });
       await orm2.em.flush();
       orm2.em.clear();

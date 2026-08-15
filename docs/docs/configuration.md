@@ -485,6 +485,9 @@ export default defineConfig({
 });
 ```
 
+Compiled function keys are derived from the generated helper content, so the artifact remains valid when unrelated
+entities are imported before your configured entities in the deployed bundle.
+
 Use the `--out` option to customize the output path:
 
 ```bash
