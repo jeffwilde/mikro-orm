@@ -5,6 +5,7 @@ import { MetadataStorage } from './metadata/MetadataStorage.js';
 import { Configuration, type Options } from './utils/Configuration.js';
 import { loadEnvironmentVars } from './utils/env-vars.js';
 import { Utils } from './utils/Utils.js';
+import { initCompiledFunctions } from './utils/CompiledFunctions.js';
 import { type Logger } from './logging/Logger.js';
 import { colors } from './logging/colors.js';
 import type { EntityManager } from './EntityManager.js';
@@ -236,6 +237,11 @@ export class MikroORM<
 
   private createEntityManager(): void {
     this.driver.setMetadata(this.#metadata);
+
+    if (this.config.get('compiledFunctionsMode') === 'required') {
+      this.validateCompiledFunctions();
+    }
+
     this.em = this.driver.createEntityManager() as EM & { '~entities': Entities };
     (this.em as { global: boolean }).global = true;
     this.#metadata.decorate(this.em);
@@ -258,7 +264,24 @@ export class MikroORM<
       meta.root = this.#metadata.get(meta.root.class);
     }
 
+    if (this.config.get('compiledFunctionsMode') === 'required') {
+      this.validateCompiledFunctions();
+    }
+
     this.#metadata.decorate(this.em);
+  }
+
+  private validateCompiledFunctions(): void {
+    const compiledFunctions = this.config.get('compiledFunctions') as Record<string, unknown> | undefined;
+    const version = compiledFunctions?.__version;
+
+    if (version !== Utils.getORMVersion()) {
+      throw new Error(
+        `Compiled functions were generated with MikroORM v${version ?? 'unknown'}, but the current version is v${Utils.getORMVersion()}. Please regenerate with \`npx mikro-orm compile\`.`,
+      );
+    }
+
+    initCompiledFunctions(this.#metadata, this.config);
   }
 
   /**

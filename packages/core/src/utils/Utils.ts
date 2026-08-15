@@ -1,6 +1,7 @@
 import { clone } from './clone.js';
 import type {
   CompiledFunctions,
+  CompiledFunctionsMode,
   Dictionary,
   EntityData,
   EntityDictionary,
@@ -940,12 +941,20 @@ export class Utils {
     code: string,
     compiledFunctions?: CompiledFunctions,
     key?: string,
+    mode: CompiledFunctionsMode = 'fallback',
   ): any {
     const compiledKey = this.getCompiledFunctionKey(context, code);
     const compiledFunction = compiledFunctions?.[compiledKey] ?? (key ? compiledFunctions?.[key] : undefined);
 
     if (compiledFunction) {
       return compiledFunction(...context.values());
+    }
+
+    if (mode === 'required') {
+      throw new Error(
+        `No pre-compiled function found for '${compiledKey}'${key ? ` (legacy key '${key}')` : ''}. ` +
+          `Regenerate the artifact with \`npx mikro-orm compile\`.`,
+      );
     }
 
     try {

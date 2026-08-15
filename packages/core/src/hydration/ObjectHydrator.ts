@@ -580,7 +580,13 @@ export class ObjectHydrator extends Hydrator {
       `return function(entity, data, factory, newEntity, convertCustomTypes, schema, parentSchema, normalizeAccessors) {\n` +
       `${lines.join('\n')}\n}`;
     const fnKey = `hydrator-${meta.uniqueName}-${type}-${normalizeAccessors}`;
-    const hydrator = Utils.createFunction(context, code, this.config.get('compiledFunctions'), fnKey);
+    const hydrator = Utils.createFunction(
+      context,
+      code,
+      this.config.get('compiledFunctions'),
+      fnKey,
+      this.config.get('compiledFunctionsMode'),
+    );
     this.#hydrators[key].set(meta.class, hydrator);
 
     return hydrator;

@@ -31,6 +31,12 @@ describe('portable compiled function artifacts', () => {
     );
     expect(existsSync(artifactPath)).toBe(true);
 
+    execFileSync(
+      process.execPath,
+      ['--import=tsx', cliPath, 'compile', '--config', configPath, '--out', artifactPath, '--check'],
+      { cwd: rootDir, stdio: 'pipe' },
+    );
+
     execFileSync(process.execPath, ['--import=tsx', runtimePath, artifactPath], {
       cwd: rootDir,
       stdio: 'pipe',

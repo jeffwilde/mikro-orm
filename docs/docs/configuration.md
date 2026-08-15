@@ -482,16 +482,25 @@ import compiledFunctions from './compiled-functions.js';
 
 export default defineConfig({
   compiledFunctions,
+  compiledFunctionsMode: 'required',
 });
 ```
 
 Compiled function keys are derived from the generated helper content, so the artifact remains valid when unrelated
-entities are imported before your configured entities in the deployed bundle.
+entities are imported before your configured entities in the deployed bundle. Set `compiledFunctionsMode` to
+`'required'` in eval-free deployments. MikroORM will validate full helper coverage during initialization and throw an
+actionable error instead of falling back to `new Function()`.
 
 Use the `--out` option to customize the output path:
 
 ```bash
 npx mikro-orm compile --out ./dist/compiled-functions.js
+```
+
+You can enforce artifact freshness in a build or packaging step without modifying the file:
+
+```bash
+npx mikro-orm compile --out ./dist/compiled-functions.js --check
 ```
 
 ## Custom Repository

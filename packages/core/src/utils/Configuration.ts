@@ -5,6 +5,7 @@ import type { EntityRepository } from '../entity/EntityRepository.js';
 import type {
   AnyEntity,
   CompiledFunctions,
+  CompiledFunctionsMode,
   Constructor,
   Dictionary,
   EnsureDatabaseOptions,
@@ -77,6 +78,7 @@ const DEFAULTS = {
     NotFoundError.findExactlyOneFailed(entityName, where),
   baseDir: globalThis.process?.cwd?.(),
   hydrator: ObjectHydrator,
+  compiledFunctionsMode: 'fallback' as const,
   flushMode: FlushMode.AUTO,
   loadStrategy: LoadStrategy.BALANCED,
   dataloader: DataloaderType.NONE,
@@ -1104,6 +1106,13 @@ export interface Options<
    * Enables deployment to runtimes that prohibit `new Function`/eval (e.g. Cloudflare Workers).
    */
   compiledFunctions?: CompiledFunctions;
+  /**
+   * Controls whether missing pre-compiled functions fall back to runtime code generation.
+   * Use `'required'` for runtimes that prohibit `new Function`/eval. This eagerly validates
+   * coverage during ORM initialization and throws instead of attempting a JIT fallback.
+   * @default 'fallback'
+   */
+  compiledFunctionsMode: CompiledFunctionsMode;
   /**
    * Default loading strategy for relations.
    * - `'joined'`: Use SQL JOINs (single query, may cause cartesian product)

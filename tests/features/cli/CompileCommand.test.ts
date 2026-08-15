@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EntityMetadata, MetadataStorage, ReferenceKind, Utils } from '@mikro-orm/core';
@@ -112,6 +112,11 @@ describe('CompileCommand', () => {
       type: 'string',
       desc: 'Output path for the generated file (defaults to next to your ORM config)',
     });
+    expect(mockOption).toHaveBeenCalledWith('check', {
+      type: 'boolean',
+      desc: 'Validate that the generated file is present and up to date without writing it',
+      default: false,
+    });
   });
 
   test('handler generates CJS output', async () => {
@@ -167,6 +172,31 @@ describe('CompileCommand', () => {
     expect(existsSync(outDtsPath)).toBe(true);
     const dts = readFileSync(outDtsPath, 'utf-8');
     expect(dts).toContain('export default compiledFunctions');
+  });
+
+  test('check validates an existing artifact without rewriting it', async () => {
+    vi.spyOn(CLIHelper, 'getConfiguration').mockResolvedValue(
+      new Configuration(
+        { driver: MySqlDriver, metadataCache: { enabled: true }, getDriver: () => ({ getPlatform: vi.fn() }) } as any,
+        false,
+      ),
+    );
+    vi.spyOn(MetadataDiscovery.prototype, 'discover').mockResolvedValue(createSimpleMetadata());
+    const dumpMock = vi.spyOn(CLIHelper, 'dump').mockImplementation(i => i);
+    vi.spyOn(CLIHelper, 'isESM').mockReturnValue(true);
+
+    const cmd = new CompileCommand();
+    await expect(cmd.handler({ out: outPath, check: true } as any)).rejects.toThrow(/missing or stale/);
+    await cmd.handler({ out: outPath } as any);
+    const generated = readFileSync(outPath, 'utf8');
+
+    await expect(cmd.handler({ out: outPath, check: true } as any)).resolves.toBeUndefined();
+    expect(readFileSync(outPath, 'utf8')).toBe(generated);
+    expect(dumpMock).toHaveBeenCalledWith(expect.stringContaining('are up to date'));
+
+    writeFileSync(outPath, 'stale');
+    await expect(cmd.handler({ out: outPath, check: true } as any)).rejects.toThrow(/missing or stale/);
+    expect(readFileSync(outPath, 'utf8')).toBe('stale');
   });
 
   test('capture detects portable key collisions', () => {

@@ -28,6 +28,7 @@ try {
   orm = new MikroORM({
     ...config,
     compiledFunctions,
+    compiledFunctionsMode: 'required',
   });
   await orm.schema.refresh();
   const user = orm.em.create(User, { name: 'Portable' });

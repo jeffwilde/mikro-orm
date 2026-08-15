@@ -68,6 +68,8 @@ describe('compiled functions', () => {
       result[key] = fn;
     }
 
+    (result as any).__version = Utils.getORMVersion();
+
     return result;
   }
 
@@ -154,6 +156,17 @@ describe('compiled functions', () => {
     const result = Utils.createFunction(context, 'return a + b;', compiledFunctions);
 
     expect(result).toBe(3);
+  });
+
+  test('Utils.createFunction throws instead of falling back in required mode', () => {
+    const context = new Map<string, any>([
+      ['a', 1],
+      ['b', 2],
+    ]);
+
+    expect(() => Utils.createFunction(context, 'return a + b;', {}, 'test-key', 'required')).toThrow(
+      /No pre-compiled function found.*Regenerate the artifact/,
+    );
   });
 
   test('generated keys do not depend on process-local metadata ids', () => {
@@ -347,5 +360,40 @@ describe('compiled functions', () => {
     } finally {
       await orm2.close(true);
     }
+  });
+
+  test('required mode validates complete coverage during initialization', async () => {
+    await expect(
+      MikroORM.init({
+        ...initOptions,
+        compiledFunctions: {},
+        compiledFunctionsMode: 'required',
+      }),
+    ).rejects.toThrow(/generated with MikroORM vunknown/);
+
+    await expect(
+      MikroORM.init({
+        ...initOptions,
+        compiledFunctions: { __version: '0.0.0' } as any,
+        compiledFunctionsMode: 'required',
+      }),
+    ).rejects.toThrow(/generated with MikroORM v0\.0\.0/);
+
+    await expect(
+      MikroORM.init({
+        ...initOptions,
+        compiledFunctions: { __version: Utils.getORMVersion() } as any,
+        compiledFunctionsMode: 'required',
+      }),
+    ).rejects.toThrow(/No pre-compiled function found/);
+
+    const compiledFunctions = generateCompiledFunctions(orm);
+    const orm2 = await MikroORM.init({
+      ...initOptions,
+      compiledFunctions,
+      compiledFunctionsMode: 'required',
+    });
+
+    await orm2.close(true);
   });
 });
