@@ -1,12 +1,11 @@
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import type { ArgumentsCamelCase, Argv } from 'yargs';
 import {
   MetadataDiscovery,
   MetadataStorage,
   Utils,
-  EntityComparator,
-  ObjectHydrator,
+  initCompiledFunctions,
   colors,
   type Configuration,
 } from '@mikro-orm/core';
@@ -14,7 +13,7 @@ import { fs } from '@mikro-orm/core/fs-utils';
 import type { BaseArgs, BaseCommand } from '../CLIConfigurator.js';
 import { CLIHelper } from '../CLIHelper.js';
 
-type CompileArgs = BaseArgs & { out?: string };
+type CompileArgs = BaseArgs & { out?: string; check?: boolean };
 
 export class CompileCommand implements BaseCommand<CompileArgs> {
   command = 'compile';
@@ -24,6 +23,11 @@ export class CompileCommand implements BaseCommand<CompileArgs> {
     args.option('out', {
       type: 'string',
       desc: 'Output path for the generated file (defaults to next to your ORM config)',
+    });
+    args.option('check', {
+      type: 'boolean',
+      desc: 'Validate that the generated file is present and up to date without writing it',
+      default: false,
     });
     return args as Argv<CompileArgs>;
   };
@@ -69,6 +73,18 @@ export class CompileCommand implements BaseCommand<CompileArgs> {
       ? `export default {\n  __version: '${version}',\n${entries.join(',\n')}\n};\n`
       : `'use strict';\nmodule.exports = {\n  __version: '${version}',\n${entries.join(',\n')}\n};\n`;
     const outPath = args.out ?? resolve(process.cwd(), 'compiled-functions.js');
+
+    if (args.check) {
+      if (!existsSync(outPath) || readFileSync(outPath, 'utf8') !== output) {
+        throw new Error(
+          `Compiled functions at ${outPath} are missing or stale. Regenerate them with \`npx mikro-orm compile\`.`,
+        );
+      }
+
+      CLIHelper.dump(colors.green(`Compiled functions at ${outPath} are up to date (${captured.length} functions)`));
+      return;
+    }
+
     const dtsPath = outPath.replace(/\.js$/, '.d.ts');
     const dts = esm
       ? `import type { CompiledFunctions } from '@mikro-orm/core';\ndeclare const compiledFunctions: CompiledFunctions;\nexport default compiledFunctions;\n`
@@ -88,40 +104,27 @@ export class CompileCommand implements BaseCommand<CompileArgs> {
   }
 
   static capture(metadata: MetadataStorage, config: Configuration) {
-    const captured: { key: string; contextKeys: string[]; code: string }[] = [];
+    const captured = new Map<string, { key: string; contextKeys: string[]; code: string }>();
     const original = Utils.createFunction;
     Utils.createFunction = (context, code, _compiledFunctions, key) => {
-      captured.push({ key: key!, contextKeys: [...context.keys()], code });
+      const compiledKey = Utils.getCompiledFunctionKey(context, code);
+      const generated = { key: compiledKey, contextKeys: [...context.keys()], code };
+      const existing = captured.get(compiledKey);
+
+      if (existing && (existing.code !== code || !Utils.equals(existing.contextKeys, generated.contextKeys))) {
+        throw new Error(`Compiled function key collision for '${compiledKey}'`);
+      }
+
+      captured.set(compiledKey, generated);
       return original.call(Utils, context, code);
     };
 
     try {
-      const platform = config.getDriver().getPlatform();
-      const hydrator = new ObjectHydrator(metadata, platform, config);
-      const comparator = new EntityComparator(metadata, platform, config);
-
-      for (const meta of metadata) {
-        hydrator.getEntityHydrator(meta, 'full', false);
-        hydrator.getEntityHydrator(meta, 'full', true);
-        comparator.getEntityComparator(meta.class);
-        comparator.getSnapshotGenerator(meta.class);
-        comparator.getResultMapper(meta);
-
-        if (!meta.embeddable && !meta.virtual) {
-          hydrator.getEntityHydrator(meta, 'reference', false);
-          hydrator.getEntityHydrator(meta, 'reference', true);
-        }
-
-        if (meta.primaryKeys.length > 0) {
-          comparator.getPkGetter(meta);
-          comparator.getPkGetterConverted(meta);
-          comparator.getPkSerializer(meta);
-        }
-      }
+      initCompiledFunctions(metadata, config);
     } finally {
       Utils.createFunction = original;
     }
 
-    return captured;
+    return [...captured.values()];
   }
 }

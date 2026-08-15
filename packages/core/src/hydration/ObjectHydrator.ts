@@ -111,6 +111,7 @@ export class ObjectHydrator extends Hydrator {
       return exists;
     }
 
+    this.#tmpIndex = 0;
     const lines: string[] = [];
     const context = new Map<string, any>();
     const props = this.getProperties(meta, type);
@@ -579,7 +580,13 @@ export class ObjectHydrator extends Hydrator {
       `return function(entity, data, factory, newEntity, convertCustomTypes, schema, parentSchema, normalizeAccessors) {\n` +
       `${lines.join('\n')}\n}`;
     const fnKey = `hydrator-${meta.uniqueName}-${type}-${normalizeAccessors}`;
-    const hydrator = Utils.createFunction(context, code, this.config.get('compiledFunctions'), fnKey);
+    const hydrator = Utils.createFunction(
+      context,
+      code,
+      this.config.get('compiledFunctions'),
+      fnKey,
+      this.config.get('compiledFunctionsMode'),
+    );
     this.#hydrators[key].set(meta.class, hydrator);
 
     return hydrator;

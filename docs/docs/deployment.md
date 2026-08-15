@@ -54,7 +54,19 @@ import compiledFunctions from './compiled-functions.js';
 
 export default defineConfig({
   compiledFunctions,
+  compiledFunctionsMode: 'required',
 });
+```
+
+The generated helpers use content-derived keys, so unrelated entity imports in a deployed bundle do not invalidate the
+artifact. In eval-free environments, `compiledFunctionsMode: 'required'` eagerly validates every configured entity at
+startup and never falls back to runtime code generation.
+
+To make artifact freshness a build-time guarantee, generate the file first and run the non-writing check after any step
+that can change the ORM config, entity metadata, driver configuration, or MikroORM version:
+
+```bash
+npx mikro-orm compile --out ./dist/compiled-functions.js --check
 ```
 
 This pairs well with `GeneratedCacheAdapter` for full production deployment without `ts-morph` or `new Function`:
@@ -66,6 +78,7 @@ import metadata from './temp/metadata.json';
 
 export default defineConfig({
   compiledFunctions,
+  compiledFunctionsMode: 'required',
   metadataCache: {
     enabled: true,
     adapter: GeneratedCacheAdapter,

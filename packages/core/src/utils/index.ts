@@ -1,4 +1,5 @@
 export * from './Configuration.js';
+export * from './CompiledFunctions.js';
 export * from './Cursor.js';
 export * from './Utils.js';
 export * from './RequestContext.js';

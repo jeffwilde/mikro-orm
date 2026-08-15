@@ -1,6 +1,7 @@
 import { clone } from './clone.js';
 import type {
   CompiledFunctions,
+  CompiledFunctionsMode,
   Dictionary,
   EntityData,
   EntityDictionary,
@@ -940,9 +941,20 @@ export class Utils {
     code: string,
     compiledFunctions?: CompiledFunctions,
     key?: string,
+    mode: CompiledFunctionsMode = 'fallback',
   ): any {
-    if (key && compiledFunctions?.[key]) {
-      return compiledFunctions[key](...context.values());
+    const compiledKey = this.getCompiledFunctionKey(context, code);
+    const compiledFunction = compiledFunctions?.[compiledKey] ?? (key ? compiledFunctions?.[key] : undefined);
+
+    if (compiledFunction) {
+      return compiledFunction(...context.values());
+    }
+
+    if (mode === 'required') {
+      throw new Error(
+        `No pre-compiled function found for '${compiledKey}'${key ? ` (legacy key '${key}')` : ''}. ` +
+          `Regenerate the artifact with \`npx mikro-orm compile\`.`,
+      );
     }
 
     try {
@@ -954,6 +966,12 @@ export class Utils {
       console.error(code);
       throw e;
     }
+  }
+
+  /** @internal */
+  static getCompiledFunctionKey(context: Map<string, any>, code: string): string {
+    const source = [...context.keys(), code].join('\0');
+    return `compiled-${this.hash(source)}`;
   }
 
   static callCompiledFunction<T extends unknown[], R>(fn: (...args: T) => R, ...args: T): R {

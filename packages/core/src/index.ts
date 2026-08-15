@@ -15,6 +15,7 @@ export {
 } from './typings.js';
 export type {
   CompiledFunctions,
+  CompiledFunctionsMode,
   Constructor,
   ConnectionType,
   Dictionary,

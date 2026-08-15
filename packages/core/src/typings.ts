@@ -45,6 +45,9 @@ export type Dictionary<T = any> = { [k: string]: T };
 /** Record of compiled functions, used internally for hydration and comparison. */
 export type CompiledFunctions = Record<string, (...args: any[]) => any>;
 
+/** Controls whether a missing pre-compiled function may fall back to runtime code generation. */
+export type CompiledFunctionsMode = 'fallback' | 'required';
+
 /**
  * Extracts string property keys from an entity, excluding symbols, functions, and internal keys.
  * Pass `B = true` to also exclude scalar properties (useful for getting only relation keys).
